@@ -1,0 +1,93 @@
+---
+title: "Personal Activity Prediction Writeup"
+author: "Suet Ling Teh"
+date: "12/27/2020"
+output: html_document
+---
+### Overview
+The goal of this project is to predict the manner of 6 participants in how they did exercise by analyzing data from accelerometers on the belt, forearm, arm and dumbell. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways.
+The data for this project come from this source: http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har
+
+### Load and clean the datasets, split the training data into sub training and testing groups by 60:40 for cross-validation
+```{r}
+## load the data
+setwd("~/R/Prediction/")
+pmltrain<- download.file("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv", destfile= "~/R/Prediction/pml-training.csv")
+pmltest<- download.file("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv", destfile= "~/R/Prediction/pml-testing.csv")
+training<- read.csv(file= '~/R/Prediction/pml-training.csv', header=TRUE)
+testing<- read.csv(file= '~/R/Prediction/pml-testing.csv', header =TRUE)
+
+##Split the testing data into sub train and test groups by 60:40
+library(caret)
+inTrain<- createDataPartition(training$classe, p=0.60, list=FALSE)
+trainset<- training[inTrain, ]
+testset<- training[-inTrain, ]
+
+##check the dimension of trainset
+dim(trainset)
+```
+```{r}
+## check the dimension of testset
+dim(testset)
+```
+```{r}
+## check the data structure
+str(trainset)
+```
+
+Remove variables with many NA, identification variables and any near zero variance variables.
+```{r}
+## remove variables with many NA
+trainset<- trainset[, !apply(trainset, 2, function(x) any(is.na(x)))]
+testset<- testset[, !apply(testset, 2, function(x)any(is.na(x)))]
+## remove identification variables
+trainset<- trainset[, -(1:5)]
+testset<- testset[, -(1:5)]
+## remove near zero variance variables
+NZV<- nearZeroVar(trainset)
+trainset<- trainset[, -NZV]
+testset<- testset[, -NZV]
+## check dimension of both datasets
+dim(trainset)
+```
+```{r}
+dim(testset)
+```
+By removing the NA, NZV, and identification variables, the number of variables is now down to 54 with 11776 obervations in trainset while 7846 observations in testset.
+
+As we are dealing with categorical outcome and with large dataset, the methods chosen to build the prediction model are Random Forest and Boosting. Then, we will compare both methods in terms of accuracy. The mehod with higher accuracy will be used to predict the test data
+
+## A) Random Forest 
+```{r}
+## set seed and build model fit
+set.seed(11234)
+library(randomForest)
+fit_rf<- train(classe~., data=trainset, method="rf")
+fit_rf$finalmodel
+## predict test dataset
+pre_rf<- predict(fit_rf, newdata=testset)
+confusionMatrix(pre_rf, as.factor(testset$classe))
+```
+```{r}
+## check the model error rate
+fit_rf$finalModel
+```
+
+## B) Boosting
+```{r}
+set.seed(11234)
+fit_boosting<- train(classe~., data=trainset, method="gbm", verbose=FALSE)
+fit_boosting$finalmodel
+## predict test dataset
+pre_boosting<- predict(fit_boosting, newdata=testset)
+confusionMatrix(pre_boosting, as.factor(testset$classe))
+```
+
+### Apply model to the testing data
+Based on the confusion matrix output, random forest has a higher accuracy ( 0.996) than boosting (0.9848) method. So, we will apply the random forest method to predict the 20 different test class.
+```{r}
+pre_test<- predict(fit_rf, newdata=testing)
+pre_test
+```
+
+
